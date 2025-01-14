@@ -6,9 +6,10 @@ import java.security.KeyPair;
 import java.util.Date;
 import java.util.HashMap;
 
+import org.dashboard.common.Passwords;
 import org.dashboard.common.Request;
-import org.dashboard.server.CheckAccess;
 import org.dashboard.server.DBUtils;
+import org.dashboard.server.defaultResponses.protectedErrors;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -16,18 +17,16 @@ import io.jsonwebtoken.InvalidClaimException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 
-import org.dashboard.server.defaultResponses.protectedErrors;
-
-public class deleteDashboardRequest {
+public class userDeleteRequest {
     public static void handle(Request req, KeyPair pair, ObjectOutputStream out) throws IOException {
         HashMap<String, String> message = req.getMessage();
         String username = message.get("username");
-        String dashboardName = message.get("dashboardName");
+        String password = message.get("password");
         String token = req.getToken();
 
         Request response = null;
 
-        if (username != null && token != null && dashboardName != null) {
+        if (username != null && token != null && password != null) {
             try {
                 Claims claims = Jwts.parser()
                     .verifyWith(pair.getPublic())
@@ -38,27 +37,42 @@ public class deleteDashboardRequest {
                 String subject = claims.getSubject();
                 String issuer = claims.getIssuer();
                 Date expiration = claims.getExpiration();
-    
-                if (CheckAccess.isOwner(subject, username, dashboardName)) {
+
+                if (subject.equals(username)) {
                     if (issuer.equals("Dashboard Server")) {
                         if (expiration.after(new Date())) {
-                            boolean success = DBUtils.deleteDashboard(dashboardName, username);
-                            HashMap<String, String> messageContent = new HashMap<String, String>();
-                            messageContent.put("username", username);
-                            messageContent.put("dashboardName", dashboardName);
-    
-                            if (success) {
-                                messageContent.put("success", "Dashboard deleted");
-    
-                                response = new Request("Delete dashboard success", messageContent);
+                            Passwords.Password expectedPassword = DBUtils.getExpectedPassword(username);
+
+                            if (expectedPassword == null) {
+                                HashMap<String, String> messageContent = new HashMap<String, String>();
+                                messageContent.put("error", "Account does not exist");
+
+                                response = new Request("User delete error", messageContent);
                             } else {
-                                messageContent.put("error", "Dashboard does not exist");
-    
-                                response = new Request("Delete dashboard error", messageContent);
+                                if (!Passwords.verify(password, expectedPassword)) {
+                                    HashMap<String, String> messageContent = new HashMap<String, String>();
+                                    messageContent.put("error", "Incorrect password");
+
+                                    response = new Request("User delete error", messageContent);
+                                } else {
+                                    HashMap<String, String> messageContent = new HashMap<String, String>();
+                                    messageContent.put("username", username);
+        
+                                    if (DBUtils.usernameExists(username)) {
+                                        if (DBUtils.deleteUser(username)) {
+                                            messageContent.put("success", "Account deleted");
+        
+                                            response = new Request("User delete success", messageContent);
+                                        }
+                                    } else {
+                                        messageContent.put("error", "Account does not exist");
+        
+                                        response = new Request("User delete error", messageContent);
+                                    }
+                                }
                             }
                         } else {
                             response = protectedErrors.tokenExpired();
-                            DBUtils.deleteSession(username);
                         }
                     } else {
                         response = protectedErrors.invalidIssuer();

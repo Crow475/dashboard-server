@@ -16,16 +16,24 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.SignatureAlgorithm;
 
 import org.dashboard.common.Request;
+import org.dashboard.server.requestHandlers.addUserOfDashboardRequest;
 import org.dashboard.server.requestHandlers.createDashboardRequest;
 import org.dashboard.server.requestHandlers.deleteDashboardRequest;
 import org.dashboard.server.requestHandlers.getDashboardRequest;
+import org.dashboard.server.requestHandlers.getDashboardUsersRequest;
+import org.dashboard.server.requestHandlers.getDashboardViewersRequest;
+import org.dashboard.server.requestHandlers.getUserOfDashboardRequest;
 import org.dashboard.server.requestHandlers.loginRequest;
 import org.dashboard.server.requestHandlers.logoutRequest;
+import org.dashboard.server.requestHandlers.removeUserOfDashboard;
 import org.dashboard.server.requestHandlers.renameDashboardRequest;
+import org.dashboard.server.requestHandlers.searchForUserRequest;
 import org.dashboard.server.requestHandlers.updateDashboardRequest;
+import org.dashboard.server.requestHandlers.updateUserOfDashboardRequest;
 import org.dashboard.server.requestHandlers.userLookupRequest;
 import org.dashboard.server.requestHandlers.userCreateRequest;
 import org.dashboard.server.requestHandlers.userDashboardsRequest;
+import org.dashboard.server.requestHandlers.userDeleteRequest;
 
 public class ClientHandler implements Runnable {
     private SSLSocket clientSocket;
@@ -78,6 +86,9 @@ public class ClientHandler implements Runnable {
                         case "Create user":
                             userCreateRequest.handle(req, reservedUsernames, out);
                             break;
+                        case "Delete user":
+                            userDeleteRequest.handle(req, pair, out);
+                            break;
                         case "Get user dashboards":
                             userDashboardsRequest.handle(req, pair, out);
                             break;
@@ -95,6 +106,27 @@ public class ClientHandler implements Runnable {
                             break;
                         case "Rename dashboard":
                             renameDashboardRequest.handle(req, pair, out);
+                            break;
+                        case "Get dashboard viewers":
+                            getDashboardViewersRequest.handle(req, pair, out);
+                            break;
+                        case "Get dashboard users":
+                            getDashboardUsersRequest.handle(req, pair, out);
+                            break;
+                        case "Get user of dashboard":
+                            getUserOfDashboardRequest.handle(req, pair, out);
+                            break;
+                        case "Update user of dashboard":
+                            updateUserOfDashboardRequest.handle(req, pair, out);
+                            break;
+                        case "Add user of dashboard":
+                            addUserOfDashboardRequest.handle(req, pair, out);
+                            break;
+                        case "Remove user of dashboard":
+                            removeUserOfDashboard.handle(req, pair, out);
+                            break;
+                        case "Search for user":
+                            searchForUserRequest.handle(req, pair, out);
                             break;
                         case "Logout request":
                             logoutRequest.handle(req, pair, out);

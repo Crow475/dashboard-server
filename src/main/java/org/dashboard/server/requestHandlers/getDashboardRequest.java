@@ -8,6 +8,7 @@ import java.util.HashMap;
 
 import org.dashboard.common.Request;
 import org.dashboard.common.models.DashboardModel;
+import org.dashboard.server.CheckAccess;
 import org.dashboard.server.DBUtils;
 import org.dashboard.server.defaultResponses.protectedErrors;
 
@@ -37,7 +38,7 @@ public class getDashboardRequest {
                 String issuer = claims.getIssuer();
                 Date expiration = claims.getExpiration();
     
-                if (subject.equals(username)) {
+                if (CheckAccess.isAtLeastViewer(subject, username, dashboardName)) {
                     if (issuer.equals("Dashboard Server")) {
                         if (expiration.after(new Date())) {
                             DashboardModel dashboard = DBUtils.getDashboardWithJSONProps(dashboardName, username);

@@ -8,6 +8,7 @@ import java.util.HashMap;
 
 import org.dashboard.common.Request;
 import org.dashboard.common.models.DashboardModel;
+import org.dashboard.server.CheckAccess;
 import org.dashboard.server.DBUtils;
 
 import io.jsonwebtoken.Claims;
@@ -40,7 +41,7 @@ public class renameDashboardRequest {
                 String issuer = claims.getIssuer();
                 Date expiration = claims.getExpiration();
     
-                if (subject.equals(username)) {
+                if (CheckAccess.isAtLeastAdmin(subject, username, newDashboardName)) {
                     if (issuer.equals("Dashboard Server")) {
                         if (expiration.after(new Date())) {
                             DashboardModel dashboard = DBUtils.getDashboardWithJSONProps(newDashboardName, username);

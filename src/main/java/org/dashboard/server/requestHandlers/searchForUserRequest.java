@@ -8,18 +8,17 @@ import java.util.Date;
 import java.util.HashMap;
 
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.InvalidClaimException;
 import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 
 import org.dashboard.common.Request;
-import org.dashboard.common.models.DashboardModel;
 
 import org.dashboard.server.DBUtils;
 import org.dashboard.server.defaultResponses.protectedErrors;
 
-public class userDashboardsRequest {
+public class searchForUserRequest {
     public static void handle(Request req, KeyPair pair, ObjectOutputStream out) throws IOException {
         HashMap<String, String> message = req.getMessage();
         String username = message.get("username");
@@ -34,29 +33,31 @@ public class userDashboardsRequest {
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
-                    
-                String subject = claims.getSubject();
+
                 String issuer = claims.getIssuer();
                 Date expiration = claims.getExpiration();
-    
-                if (subject.equals(username)) {
-                    if (issuer.equals("Dashboard Server")) {
-                        if (expiration.after(new Date())) {
-                            ArrayList<DashboardModel> dashboards = DBUtils.getAllDashboards(username);
-                            HashMap<String, String> messageContent = new HashMap<String, String>();
-                            messageContent.put("success", "Dashboards retrieved");
-                            messageContent.put("username", username);
-    
-                            response = new Request("Get user dashboards success", messageContent, dashboards);
+
+                if (issuer.equals("Dashboard Server")) {
+                    if (expiration.after(new Date())) {
+                        ArrayList<String> users = DBUtils.searchForUser(username);
+                        HashMap<String, String> messageContent = new HashMap<String, String>();
+                        messageContent.put("username", username);
+
+                        if (users != null) {
+                            messageContent.put("success", "Users found");
+
+                            response = new Request("Search for user success", messageContent, users);
                         } else {
-                            response = protectedErrors.tokenExpired();
-                            DBUtils.deleteSession(username);
+                            messageContent.put("error", "No users found");
+
+                            response = new Request("Search for user error", messageContent);
                         }
                     } else {
-                        response = protectedErrors.invalidIssuer();
+                        response = protectedErrors.tokenExpired();
+                        DBUtils.deleteSession(username);
                     }
                 } else {
-                    response = protectedErrors.notAllowed();
+                    response = protectedErrors.invalidIssuer();
                 }
             } catch (ExpiredJwtException e) {
                 response = protectedErrors.tokenExpired();

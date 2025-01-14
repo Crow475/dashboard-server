@@ -20,7 +20,9 @@ import io.github.cdimascio.dotenv.Dotenv;
 
 import org.dashboard.common.Pair;
 import org.dashboard.common.Passwords;
-import org.dashboard.common.models.DashboardModel;;
+import org.dashboard.common.Role;
+import org.dashboard.common.models.DashboardModel;
+import org.dashboard.common.models.UserOfDashboard;;
 
 public class DBUtils {
 
@@ -188,7 +190,10 @@ public class DBUtils {
                 try {
                     DashboardModel.Properties propertiesObject = objectMapper.readValue(properties, DashboardModel.Properties.class);
 
-                    return new DashboardModel(id, ownerId, createdAt, editedAt, name, propertiesObject);
+                    DashboardModel model = new DashboardModel(id, ownerId, createdAt, editedAt, name, propertiesObject);
+                    model.setOwnerUsername(userName);
+
+                    return model;
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -216,7 +221,9 @@ public class DBUtils {
                 Date editedAt = resultSet.getTimestamp("edited_at");
                 
                 try {
-                    return new DashboardModel(id, ownerId, createdAt, editedAt, name, properties);
+                    DashboardModel model = new DashboardModel(id, ownerId, createdAt, editedAt, name, properties);
+                    model.setOwnerUsername(userName);
+                    return model;
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -245,11 +252,15 @@ public class DBUtils {
                 String properties = resultSet.getString("properties");
                 Date createdAt = resultSet.getTimestamp("created_at");
                 Date editedAt = resultSet.getTimestamp("edited_at");
+
+                String userName = getUserName(ownerId);
                 
                 try {
                     DashboardModel.Properties propertiesObject = objectMapper.readValue(properties, DashboardModel.Properties.class);
 
-                    return new DashboardModel(id, ownerId, createdAt, editedAt, name, propertiesObject);
+                    DashboardModel model = new DashboardModel(id, ownerId, createdAt, editedAt, name, propertiesObject);
+                    model.setOwnerUsername(userName);
+                    return model;
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -261,7 +272,7 @@ public class DBUtils {
         return null;
     }
 
-    public static ArrayList<DashboardModel> getDashboards(String userName) {
+    public static ArrayList<DashboardModel> getOwnedDashboards(String userName) {
         ObjectMapper objectMapper = new ObjectMapper();
         SimpleModule module = new SimpleModule();
         module.addKeyDeserializer(Pair.class, new pairKeyDeserializer());
@@ -286,6 +297,7 @@ public class DBUtils {
                 
                 try {
                     DashboardModel dashboard = new DashboardModel(id, ownerId, createdAt, editedAt, name, properties);
+                    dashboard.setOwnerUsername(userName);
 
                     dashboards.add(dashboard);
                     
@@ -444,6 +456,411 @@ public class DBUtils {
             preparedStatement.setString(1, newName);
             preparedStatement.setString(2, oldName);
             preparedStatement.setString(3, userName);
+            int rowAffected = preparedStatement.executeUpdate();
+
+            success = rowAffected > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            success = false;
+        }
+
+        return success;
+    }
+
+    public static boolean addViewer(String ownerName, String dashboardName, String viewerName) {
+        boolean success = false;
+        String sql = "INSERT INTO viewers (dashboard_id, user_id) VALUES ((SELECT id FROM dashboards WHERE name = ? AND owner_id = (SELECT id FROM users WHERE user_name = ?)), (SELECT id FROM users WHERE user_name = ?))";
+        
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, dashboardName);
+            preparedStatement.setString(2, ownerName);
+            preparedStatement.setString(3, viewerName);
+            int rowAffected = preparedStatement.executeUpdate();
+
+            success = rowAffected > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            success = false;
+        }
+
+        return success;
+    }
+
+    public static ArrayList<DashboardModel> getViewedDashboards(String username) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        SimpleModule module = new SimpleModule();
+        module.addKeyDeserializer(Pair.class, new pairKeyDeserializer());
+        objectMapper.registerModule(module);
+
+        String sql = "SELECT * FROM dashboards WHERE id IN (SELECT dashboard_id FROM viewers WHERE user_id = (SELECT id FROM users WHERE user_name = ?))";
+        
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, username);
+            ResultSet resultSet = preparedStatement.executeQuery();
+
+            ArrayList<DashboardModel> dashboards = new ArrayList<DashboardModel>();
+
+            while (resultSet.next()) {
+                byte[] id = resultSet.getBytes("id");
+                byte[] ownerId = resultSet.getBytes("owner_id");
+                String name = resultSet.getString("name");
+                String properties = resultSet.getString("properties");
+                Date createdAt = resultSet.getTimestamp("created_at");
+                Date editedAt = resultSet.getTimestamp("edited_at");
+                
+                try {
+                    DashboardModel dashboard = new DashboardModel(id, ownerId, createdAt, editedAt, name, properties);
+                    dashboard.setOwnerUsername(getUserName(ownerId));
+
+                    dashboards.add(dashboard);
+                    
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+            return dashboards;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    public static ArrayList<String> getDashboardViewers(String ownerName, String dashboardName) {
+        String sql = "SELECT user_name FROM users WHERE id IN (SELECT user_id FROM viewers WHERE dashboard_id = (SELECT id FROM dashboards WHERE name = ? AND owner_id = (SELECT id FROM users WHERE user_name = ?)))";
+        
+        System.out.println("getDashboardViewers: " + ownerName + " : " + dashboardName);
+
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, dashboardName);
+            preparedStatement.setString(2, ownerName);
+            ResultSet resultSet = preparedStatement.executeQuery();
+
+            ArrayList<String> viewers = new ArrayList<String>();
+
+            while (resultSet.next()) {
+                viewers.add(resultSet.getString("user_name"));
+            }
+
+            System.out.println(viewers);
+
+            return viewers;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    public static boolean removeViewer(String ownerName, String dashboardName, String viewerName) {
+        boolean success = false;
+        String sql = "DELETE FROM viewers WHERE dashboard_id = (SELECT id FROM dashboards WHERE name = ? AND owner_id = (SELECT id FROM users WHERE user_name = ?)) AND user_id = (SELECT id FROM users WHERE user_name = ?)";
+        
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, dashboardName);
+            preparedStatement.setString(2, ownerName);
+            preparedStatement.setString(3, viewerName);
+            int rowAffected = preparedStatement.executeUpdate();
+
+            success = rowAffected > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            success = false;
+        }
+
+        return success;
+    }
+
+    public static boolean addEditor(String ownerName, String dashboardName, String editorName) {
+        boolean success = false;
+        String sql = "INSERT INTO editors (dashboard_id, user_id) VALUES ((SELECT id FROM dashboards WHERE name = ? AND owner_id = (SELECT id FROM users WHERE user_name = ?)), (SELECT id FROM users WHERE user_name = ?))";
+        
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, dashboardName);
+            preparedStatement.setString(2, ownerName);
+            preparedStatement.setString(3, editorName);
+            int rowAffected = preparedStatement.executeUpdate();
+
+            success = rowAffected > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            success = false;
+        }
+
+        return success;
+    }
+
+    public static ArrayList<DashboardModel> getEditedDashboards(String username) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        SimpleModule module = new SimpleModule();
+        module.addKeyDeserializer(Pair.class, new pairKeyDeserializer());
+        objectMapper.registerModule(module);
+
+        String sql = "SELECT * FROM dashboards WHERE id IN (SELECT dashboard_id FROM editors WHERE user_id = (SELECT id FROM users WHERE user_name = ?))";
+        
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, username);
+            ResultSet resultSet = preparedStatement.executeQuery();
+
+            ArrayList<DashboardModel> dashboards = new ArrayList<DashboardModel>();
+
+            while (resultSet.next()) {
+                byte[] id = resultSet.getBytes("id");
+                byte[] ownerId = resultSet.getBytes("owner_id");
+                String name = resultSet.getString("name");
+                String properties = resultSet.getString("properties");
+                Date createdAt = resultSet.getTimestamp("created_at");
+                Date editedAt = resultSet.getTimestamp("edited_at");
+                
+                try {
+                    DashboardModel dashboard = new DashboardModel(id, ownerId, createdAt, editedAt, name, properties);
+                    dashboard.setOwnerUsername(getUserName(ownerId));
+
+                    dashboards.add(dashboard);
+                    
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+            return dashboards;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    public static ArrayList<String> getDashboardEditors(String ownerName, String dashboardName) {
+        String sql = "SELECT user_name FROM users WHERE id IN (SELECT user_id FROM editors WHERE dashboard_id = (SELECT id FROM dashboards WHERE name = ? AND owner_id = (SELECT id FROM users WHERE user_name = ?)))";
+        
+        System.out.println("getDashboardEditors: " + ownerName + " : " + dashboardName);
+
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, dashboardName);
+            preparedStatement.setString(2, ownerName);
+            ResultSet resultSet = preparedStatement.executeQuery();
+
+            ArrayList<String> editors = new ArrayList<String>();
+
+            while (resultSet.next()) {
+                editors.add(resultSet.getString("user_name"));
+            }
+
+            return editors;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    public static boolean removeEditor(String ownerName, String dashboardName, String editorName) {
+        boolean success = false;
+        String sql = "DELETE FROM editors WHERE dashboard_id = (SELECT id FROM dashboards WHERE name = ? AND owner_id = (SELECT id FROM users WHERE user_name = ?)) AND user_id = (SELECT id FROM users WHERE user_name = ?)";
+        
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, dashboardName);
+            preparedStatement.setString(2, ownerName);
+            preparedStatement.setString(3, editorName);
+            int rowAffected = preparedStatement.executeUpdate();
+
+            success = rowAffected > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            success = false;
+        }
+
+        return success;
+    }
+
+    public static boolean addAdmin(String ownerName , String dashboardName, String adminName) {
+        boolean success = false;
+        String sql = "INSERT INTO admins (dashboard_id, user_id) VALUES ((SELECT id FROM dashboards WHERE name = ? AND owner_id = (SELECT id FROM users WHERE user_name = ?)), (SELECT id FROM users WHERE user_name = ?))";
+        
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, dashboardName);
+            preparedStatement.setString(2, ownerName);
+            preparedStatement.setString(3, adminName);
+            int rowAffected = preparedStatement.executeUpdate();
+
+            success = rowAffected > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            success = false;
+        }
+
+        return success;
+    }
+
+    public static ArrayList<DashboardModel> getAdminDashboards(String username) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        SimpleModule module = new SimpleModule();
+        module.addKeyDeserializer(Pair.class, new pairKeyDeserializer());
+        objectMapper.registerModule(module);
+
+        String sql = "SELECT * FROM dashboards WHERE id IN (SELECT dashboard_id FROM admins WHERE user_id = (SELECT id FROM users WHERE user_name = ?))";
+        
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, username);
+            ResultSet resultSet = preparedStatement.executeQuery();
+
+            ArrayList<DashboardModel> dashboards = new ArrayList<DashboardModel>();
+
+            while (resultSet.next()) {
+                byte[] id = resultSet.getBytes("id");
+                byte[] ownerId = resultSet.getBytes("owner_id");
+                String name = resultSet.getString("name");
+                String properties = resultSet.getString("properties");
+                Date createdAt = resultSet.getTimestamp("created_at");
+                Date editedAt = resultSet.getTimestamp("edited_at");
+                
+                try {
+                    DashboardModel dashboard = new DashboardModel(id, ownerId, createdAt, editedAt, name, properties);
+                    dashboard.setOwnerUsername(getUserName(ownerId));
+
+                    dashboards.add(dashboard);
+                    
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+            return dashboards;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    public static ArrayList<String> getDashboardAdmins(String ownerName, String dashboardName) {
+        String sql = "SELECT user_name FROM users WHERE id IN (SELECT user_id FROM admins WHERE dashboard_id = (SELECT id FROM dashboards WHERE name = ? AND owner_id = (SELECT id FROM users WHERE user_name = ?)))";
+        
+        System.out.println("getDashboardAdmins: " + ownerName + " : " + dashboardName);
+
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, dashboardName);
+            preparedStatement.setString(2, ownerName);
+            ResultSet resultSet = preparedStatement.executeQuery();
+
+            ArrayList<String> admins = new ArrayList<String>();
+
+            while (resultSet.next()) {
+                admins.add(resultSet.getString("user_name"));
+            }
+
+            return admins;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    public static boolean removeAdmin(String ownerName, String dashboardName, String adminName) {
+        boolean success = false;
+        String sql = "DELETE FROM admins WHERE dashboard_id = (SELECT id FROM dashboards WHERE name = ? AND owner_id = (SELECT id FROM users WHERE user_name = ?)) AND user_id = (SELECT id FROM users WHERE user_name = ?)";
+        
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, dashboardName);
+            preparedStatement.setString(2, ownerName);
+            preparedStatement.setString(3, adminName);
+            int rowAffected = preparedStatement.executeUpdate();
+
+            success = rowAffected > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            success = false;
+        }
+
+        return success;
+    }
+
+    public static ArrayList<String> searchForUser(String username) {
+        String sql = "SELECT user_name FROM users WHERE LOWER (user_name) LIKE ?";
+        
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, "%" + username.toLowerCase() + "%");
+            ResultSet resultSet = preparedStatement.executeQuery();
+
+            ArrayList<String> users = new ArrayList<String>();
+            while (resultSet.next()) {
+                users.add(resultSet.getString("user_name"));
+            }
+
+            return users;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    public static ArrayList<DashboardModel> getAllDashboards(String username) {
+        ArrayList<DashboardModel> ownedDashboards = getOwnedDashboards(username);
+        ArrayList<DashboardModel> viewedDashboards = getViewedDashboards(username);
+        ArrayList<DashboardModel> editedDashboards = getEditedDashboards(username);
+        ArrayList<DashboardModel> adminDashboards = getAdminDashboards(username);
+
+        ArrayList<DashboardModel> allDashboards = new ArrayList<DashboardModel>();
+        allDashboards.addAll(ownedDashboards);
+        allDashboards.addAll(viewedDashboards);
+        allDashboards.addAll(editedDashboards);
+        allDashboards.addAll(adminDashboards);
+
+        return allDashboards;
+    }
+
+    public static ArrayList<UserOfDashboard> getDashboardUsers(String ownerName, String dashboardName) {
+        if (!dashbaordExists(dashboardName, ownerName)) {
+            return null;
+        }
+
+        ArrayList<String> admins = getDashboardAdmins(ownerName, dashboardName);
+        ArrayList<String> editors = getDashboardEditors(ownerName, dashboardName);
+        ArrayList<String> viewers = getDashboardViewers(ownerName, dashboardName);
+        
+        ArrayList<UserOfDashboard> users = new ArrayList<UserOfDashboard>();
+
+        users.add(new UserOfDashboard(ownerName, dashboardName, Role.OWNER));
+
+        for (String admin : admins) {
+            users.add(new UserOfDashboard(admin, dashboardName, Role.ADMIN));
+        }
+
+        for (String editor : editors) {
+            users.add(new UserOfDashboard(editor, dashboardName, Role.EDITOR));
+        }
+
+        for (String viewer : viewers) {
+            users.add(new UserOfDashboard(viewer, dashboardName, Role.VIEWER));
+        }
+
+        return users;
+    }
+
+    public static boolean deleteUser(String username) {
+        boolean success = false;
+        String sql = "DELETE FROM users WHERE user_name = ?";
+        
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, username);
             int rowAffected = preparedStatement.executeUpdate();
 
             success = rowAffected > 0;
