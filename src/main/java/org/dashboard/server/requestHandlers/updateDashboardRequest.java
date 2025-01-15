@@ -41,7 +41,7 @@ public class updateDashboardRequest {
                 String issuer = claims.getIssuer();
                 Date expiration = claims.getExpiration();
     
-                if (CheckAccess.isAtLeastEditor(subject, username, dashboardName)) {
+                if (CheckAccess.isAtLeastViewer(subject, username, dashboardName)) {
                     if (issuer.equals("Dashboard Server")) {
                         if (expiration.after(new Date())) {
                             DashboardModel dashboardInDB = DBUtils.getDashboardWithJSONProps(dashboardName, username);
@@ -50,23 +50,16 @@ public class updateDashboardRequest {
                                 System.out.println(subject);
                                 System.out.println(DBUtils.getUserName(dashboardInDB.getOwnerId()));
                                 
-                                if (subject.equals(DBUtils.getUserName(dashboardInDB.getOwnerId()))) {
-                                    // dashboardModel.updatePropertiesFromJSON();
-                                    boolean success = DBUtils.updateDashboard(dashboardModel, properties);
-                                    HashMap<String, String> messageContent = new HashMap<String, String>();
-                                    messageContent.put("username", username);
-                                    messageContent.put("dashboardName", dashboardName);
-    
-                                    if (success) {
-                                        messageContent.put("success", "Dashboard updated");
-                                        response = new Request("Update dashboard success", messageContent);
-                                    } else {
-                                        messageContent.put("error", "Failed to update dashboard");
-                                        response = new Request("Update dashboard error", messageContent);
-                                    }
+                                boolean success = DBUtils.updateDashboard(dashboardModel, properties);
+                                HashMap<String, String> messageContent = new HashMap<String, String>();
+                                messageContent.put("username", username);
+                                messageContent.put("dashboardName", dashboardName);
+
+                                if (success) {
+                                    messageContent.put("success", "Dashboard updated");
+                                    response = new Request("Update dashboard success", messageContent);
                                 } else {
-                                    HashMap<String, String> messageContent = new HashMap<String, String>();
-                                    messageContent.put("error", "You do not have permission to update this dashboard");
+                                    messageContent.put("error", "Failed to update dashboard");
                                     response = new Request("Update dashboard error", messageContent);
                                 }
                             } else {
