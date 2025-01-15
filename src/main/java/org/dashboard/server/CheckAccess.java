@@ -17,7 +17,7 @@ public class CheckAccess {
     public static boolean isViewer (String subject, String username, String dashboardName) {
         boolean isViewer = false;
         ArrayList<String> viewers = DBUtils.getDashboardViewers(username, dashboardName);
-        System.out.println("Is viewer of: " + subject + " : " + viewers);
+        // System.out.println("Is viewer of: " + subject + " : " + viewers);
         if (viewers != null) {
             isViewer = viewers.contains(subject);
         }
@@ -28,7 +28,7 @@ public class CheckAccess {
     public static boolean isEditor (String subject, String username, String dashboardName) {
         boolean isEditor = false;
         ArrayList<String> editors = DBUtils.getDashboardEditors(username, dashboardName);
-        System.out.println("Is editor of: " + subject + " : " + editors);
+        // System.out.println("Is editor of: " + subject + " : " + editors);
         if (editors != null) {
             isEditor = editors.contains(subject);
         }
@@ -39,7 +39,7 @@ public class CheckAccess {
     public static boolean isAdmin (String subject, String username, String dashboardName) {
         boolean isAdmin = false;
         ArrayList<String> admins = DBUtils.getDashboardAdmins(username, dashboardName);
-        System.out.println("Is admin of: " + subject + " : " + admins);
+        // System.out.println("Is admin of: " + subject + " : " + admins);
         if (admins != null) {
             isAdmin = admins.contains(subject);
         }
@@ -62,19 +62,19 @@ public class CheckAccess {
     public static Role getRoleIn (String subject, String username, String dashboardName) {
         System.out.println("Getting role of: " + subject + " in " + username + " : " + dashboardName);
         if (isOwner(subject, username, dashboardName)) {
-            System.out.println("Owner");
+            // System.out.println("Owner");
             return Role.OWNER;
         } else if (isAdmin(subject, username, dashboardName)) {
-            System.out.println("Admin");
+            // System.out.println("Admin");
             return Role.ADMIN;
         } else if (isEditor(subject, username, dashboardName)) {
-            System.out.println("Editor");
+            // System.out.println("Editor");
             return Role.EDITOR;
         } else if (isViewer(subject, username, dashboardName)) {
-            System.out.println("Viewer");
+            // System.out.println("Viewer");
             return Role.VIEWER;
         } else {
-            System.out.println("None");
+            // System.out.println("None");
             return Role.NONE;
         }
     }
